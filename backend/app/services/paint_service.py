@@ -13,17 +13,24 @@ class PaintService:
         if not r: return None
         return {"room": r, "openings": openings.for_room(self._c, rid)}
     def settings(self): return settings.get_map(self._c)
+    def save_settings(self, kv): return settings.set_map(self._c, kv)
     def history(self, limit=50): return runs.list_recent(self._c, limit)
-    def estimate(self, room_id, persist, coats=None, coverage=None):
+    def estimate(self, room_id, persist, coats=None, coverage=None, coverage_list=None):
         detail = self.room_detail(room_id)
         if not detail: return None
         r = detail["room"]
         cov, ct = settings.coverage_coats(self._c)
         cov = float(coverage or cov)
         ct = int(coats or ct)
+        tiers = [float(x) for x in coverage_list] if coverage_list is not None else None
         ops = [{"w": o["w"], "h": o["h"]} for o in detail["openings"]]
-        result = estimate_room(r["length"], r["width"], r["height"], ops, cov, ct)
-        rid = runs.insert(self._c, "estimate", {"room_id": room_id, "coats": ct, "coverage": cov}, result, room_id) if persist else None
+        result = estimate_room(r["length"], r["width"], r["height"], ops, cov, ct, tiers)
+        payload = {"room_id": room_id, "coats": ct}
+        if tiers is not None:
+            payload["coverage_list"] = result["coverage_list"]
+        else:
+            payload["coverage"] = cov
+        rid = runs.insert(self._c, "estimate", payload, result, room_id) if persist else None
         return {"run_id": rid, "room_id": room_id, **result}
     def dashboard(self):
         rs = rooms.list_all(self._c)
